@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# Function to replace placeholders and execute the template
+execute_template() {
+    local template_name=$1
+    local template_path="api_templates/${template_name}.endpoint"
+
+    if [[ ! -f "$template_path" ]]; then
+        echo "Template does not exist: $template_path"
+        exit 1
+    fi
+
+    # Load template variables
+    source $template_path
+
+    # Replace placeholders in URL
+    eval "URL=\"$URL\""
+
+    # Prepare headers
+    IFS=$'\n' read -d '' -r -a headers < <(echo "$HEADERS" && printf '\0')
+    headers_arg=()
+    for header in "${headers[@]}"; do
+        headers_arg+=(-H "$header")
+    done
+
+    # Execute curl command based on the HTTP method and pipe to jq if applicable
+    case $METHOD in
+        GET|POST|PUT|DELETE|PATCH|OPTIONS)
+            curl "${headers_arg[@]}" "$URL" | jq .
+            ;;
+        HEAD)
+            # HEAD requests do not return a body, so jq is not used here
+            curl -I "${headers_arg[@]}" "$URL"
+            ;;
+        *)
+            echo "Unsupported method: $METHOD"
+            exit 1
+            ;;
+    esac
+}
+
+# Check if template name is provided
+if [[ $# -eq 0 ]]; then
+    echo "Usage: $0 <template_name>"
+    exit 1
+fi
+
+template_name=$1
+execute_template $template_name
